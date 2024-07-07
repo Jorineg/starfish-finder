@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Starfish Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            font-size: 1.5em;
+            margin: 20px 0;
+        }
+
+        video {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        #results {
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+
+        .green {
+            color: green;
+        }
+
+        .black {
+            color: black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Starfish Detector</h1>
+    <video id="camera" autoplay></video>
+    <div id="results"></div>
+    <script src="wasm.js"></script>
+    <script src="edge-impulse-standalone.js"></script>
+    <script src="run-impulse.js"></script>
+    <script>
+        (async () => {
+            var classifier = new EdgeImpulseClassifier();
+            await classifier.init();
+
+            // let project = classifier.getProjectInfo();
+            // document.querySelector('h1').textContent = `${project.owner} / ${project.name} (version ${project.deploy_version})`;
+
+            const video = document.getElementById('camera');
+            const resultsDiv = document.getElementById('results');
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        video.srcObject = stream;
+                        video.play();
+                    });
+            }
+
+            video.addEventListener('loadeddata', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 96;
+                canvas.height = 96;
+                const context = canvas.getContext('2d');
+
+                function processFrame() {
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    const imageDataArray = Array.from(imageData.data);
+
+                    const rgb888Array = [];
+
+                    for (let i = 0; i < imageDataArray.length; i += 4) {
+                        const r = imageDataArray[i];
+                        const g = imageDataArray[i + 1];
+                        const blue = imageDataArray[i + 2];
+                        // Combine RGB into a single number (24 bits)
+                        const rgb888 = (r << 16) | (g << 8) | blue;
+                        rgb888Array.push(rgb888);
+                    }
+
+
+
+                    try {
+                        let res = classifier.classify(rgb888Array);
+                        const label = res.results[1].value > res.results[0].value ? 'yes' : 'no';
+                        resultsDiv.textContent = label === 'yes' ? 'Starfish detected' : 'No starfish...';
+                        resultsDiv.className = label === 'yes' ? 'green' : 'black';
+                    } catch (ex) {
+                        alert('Failed to classify: ' + (ex.message || ex.toString()));
+                    }
+
+                    requestAnimationFrame(processFrame);
+                }
+
+                processFrame();
+            });
+        })();
+    </script>
+</body>
+
+</html>
