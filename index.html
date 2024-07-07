@@ -93,7 +93,7 @@
 
                     try {
                         let res = classifier.classify(rgb888Array);
-                        const label = res.results[1].value > res.results[0].value ? 'yes' : 'no';
+                        const label = res.results[1].value > 0.8 ? 'yes' : 'no';
                         resultsDiv.textContent = label === 'yes' ? 'Starfish detected' : 'No starfish...';
                         resultsDiv.className = label === 'yes' ? 'green' : 'black';
                     } catch (ex) {
