@@ -132,7 +132,7 @@
 
                     try {
                         let res = classifier.classify(rgb888Array);
-                        const label = res.results[1].value > 0.8 ? 'yes' : 'no';
+                        const label = res.results[1].value > 0.99 ? 'yes' : 'no';
                         if (label === 'yes') {
                             resultsDiv.textContent = 'Starfish detected';
                             resultsDiv.className = 'green';
