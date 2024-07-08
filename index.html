@@ -35,6 +35,14 @@
         .black {
             color: black;
         }
+
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            display: none;
+        }
     </style>
 </head>
 
@@ -42,6 +50,7 @@
     <h1>Starfish Detector</h1>
     <video id="camera" autoplay></video>
     <div id="results"></div>
+    <button id="restartButton">Restart</button>
     <script src="wasm.js"></script>
     <script src="edge-impulse-standalone.js"></script>
     <script src="run-impulse.js"></script>
@@ -50,30 +59,54 @@
             var classifier = new EdgeImpulseClassifier();
             await classifier.init();
 
-            // let project = classifier.getProjectInfo();
-            // document.querySelector('h1').textContent = `${project.owner} / ${project.name} (version ${project.deploy_version})`;
-
             const video = document.getElementById('camera');
             const resultsDiv = document.getElementById('results');
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
-                    .then(stream => {
-                        video.srcObject = stream;
-                        video.play();
-                    })
-                    .catch(err => {
-                        // If back camera is not available, fall back to any available camera
-                        console.warn("Back camera not available, using any available camera: ", err);
-                        navigator.mediaDevices.getUserMedia({ video: true })
-                            .then(stream => {
-                                video.srcObject = stream;
-                                video.play();
-                            })
-                            .catch(err => {
-                                console.error("Error accessing the camera: ", err);
-                            });
-                    });
+            const restartButton = document.getElementById('restartButton');
+            let stream;
+            let isDetecting = true;
+
+            function startCamera() {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
+                        .then(str => {
+                            stream = str;
+                            video.srcObject = stream;
+                            video.play();
+                        })
+                        .catch(err => {
+                            console.warn("Back camera not available, using any available camera: ", err);
+                            navigator.mediaDevices.getUserMedia({ video: true })
+                                .then(str => {
+                                    stream = str;
+                                    video.srcObject = stream;
+                                    video.play();
+                                })
+                                .catch(err => {
+                                    console.error("Error accessing the camera: ", err);
+                                });
+                        });
+                }
             }
+
+            function stopCamera() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                video.srcObject = null;
+            }
+
+            function restartDetection() {
+                isDetecting = true;
+                resultsDiv.textContent = '';
+                resultsDiv.className = '';
+                restartButton.style.display = 'none';
+                startCamera();
+            }
+
+            restartButton.addEventListener('click', restartDetection);
+
+            startCamera();
+
             video.addEventListener('loadeddata', () => {
                 const canvas = document.createElement('canvas');
                 canvas.width = 96;
@@ -81,6 +114,8 @@
                 const context = canvas.getContext('2d');
 
                 function processFrame() {
+                    if (!isDetecting) return;
+
                     context.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
                     const imageDataArray = Array.from(imageData.data);
@@ -91,23 +126,27 @@
                         const r = imageDataArray[i];
                         const g = imageDataArray[i + 1];
                         const blue = imageDataArray[i + 2];
-                        // Combine RGB into a single number (24 bits)
                         const rgb888 = (r << 16) | (g << 8) | blue;
                         rgb888Array.push(rgb888);
                     }
 
-
-
                     try {
                         let res = classifier.classify(rgb888Array);
                         const label = res.results[1].value > 0.8 ? 'yes' : 'no';
-                        resultsDiv.textContent = label === 'yes' ? 'Starfish detected' : 'No starfish...';
-                        resultsDiv.className = label === 'yes' ? 'green' : 'black';
+                        if (label === 'yes') {
+                            resultsDiv.textContent = 'Starfish detected';
+                            resultsDiv.className = 'green';
+                            isDetecting = false;
+                            stopCamera();
+                            restartButton.style.display = 'inline-block';
+                        } else {
+                            resultsDiv.textContent = 'No starfish...';
+                            resultsDiv.className = 'black';
+                            requestAnimationFrame(processFrame);
+                        }
                     } catch (ex) {
                         alert('Failed to classify: ' + (ex.message || ex.toString()));
                     }
-
-                    requestAnimationFrame(processFrame);
                 }
 
                 processFrame();
